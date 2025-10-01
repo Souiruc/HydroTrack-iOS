@@ -1,0 +1,31 @@
+# Xcode
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+!*.xcodeproj/xcshareddata/
+!*.xcodeproj/project.xcworkspace/
+*.xcworkspace/*
+!*.xcworkspace/contents.xcworkspacedata
+!*.xcworkspace/xcshareddata/
+
+# Build
+build/
+DerivedData/
+
+# User settings
+*.xcuserstate
+*.xcuserdatad/
+
+# macOS
+.DS_Store
+
+# IDE and Development Tools
+.vscode/
+.idea/
+
+# Amazon Q and Chat Histories
+.amazonq/
+.chat histories/
+manual_chat_history/
+
+# Project Management Tools
+.kiro/
