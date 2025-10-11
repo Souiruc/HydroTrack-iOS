@@ -8,13 +8,16 @@
 import SwiftUI
 
 struct ContentView: View {
-    // State to track daily water intake
-    @State private var todayIntake: Int = 1462 // ml consumed today
-    @State private var dailyGoal: Int = 2250   // ml daily goal
+    // Data persistence
+    @StateObject private var dataManager = DataManager()
+    @StateObject private var notificationManager = NotificationManager()
+    
+    // UI state
     @State private var customAmount: String = ""
     @State private var selectedUnit: VolumeUnit = .ml
     @State private var showingCustomInput: Bool = false
     @State private var showingSettings: Bool = false
+    @State private var showingPartner: Bool = false
     
     enum VolumeUnit: String, CaseIterable {
         case ml = "ml"
@@ -32,8 +35,8 @@ struct ContentView: View {
         VStack(spacing: 30) {
             // App Header
             HStack {
-                Button(action: {}) {
-                    Image(systemName: "line.horizontal.3")
+                Button(action: { showingPartner = true }) {
+                    Image(systemName: "person.2")
                         .font(.title2)
                         .foregroundColor(.primary)
                 }
@@ -80,10 +83,10 @@ struct ContentView: View {
                     Text("\(Int(progressPercentage * 100))%")
                         .font(.largeTitle)
                         .fontWeight(.bold)
-                    Text("\(todayIntake)ml")
+                    Text("\(dataManager.todayIntake)ml")
                         .font(.title3)
                         .foregroundColor(.secondary)
-                    Text("\(dailyGoal)ml")
+                    Text("\(dataManager.dailyGoal)ml")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -156,20 +159,32 @@ struct ContentView: View {
             )
         }
         .sheet(isPresented: $showingSettings) {
-            SettingsView(dailyGoal: $dailyGoal)
+            SettingsView(dataManager: dataManager)
+        }
+        .sheet(isPresented: $showingPartner) {
+            PartnerView()
+        }
+        .onAppear {
+            // Request notification permissions when app launches
+            if !notificationManager.hasPermission {
+                notificationManager.requestPermission()
+            }
         }
     }
     
     // Computed property for progress percentage
     private var progressPercentage: Double {
-        return min(Double(todayIntake) / Double(dailyGoal), 1.0)
+        return min(Double(dataManager.todayIntake) / Double(dataManager.dailyGoal), 1.0)
     }
     
     // Function to log water intake
     private func logWater(_ amount: Int) {
         withAnimation {
-            todayIntake += amount
+            dataManager.logWater(amount)
         }
+        
+        // AI Learning: Track this drinking session
+        notificationManager.logWaterIntake(amount: amount)
     }
 }
 

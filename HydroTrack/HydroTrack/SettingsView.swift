@@ -8,11 +8,7 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @Binding var dailyGoal: Int
-    @State private var partnerConnected: Bool = false
-    @State private var partnerName: String = ""
-    @State private var defaultMessage: String = "You still have {volume}ml left to reach your daily goal. Keep hydrating!"
-    @State private var partnerMessage: String = "My love, you still have {volume}ml of water you need to drink. Please complete it while knowing that I love you."
+    @ObservedObject var dataManager: DataManager
     @State private var showingMessageEditor: Bool = false
     @Environment(\.dismiss) private var dismiss
     
@@ -31,20 +27,24 @@ struct SettingsView: View {
                             
                             HStack(spacing: 8) {
                                 Button(action: { 
-                                    if dailyGoal > 500 { dailyGoal -= 250 }
+                                    if dataManager.dailyGoal > 500 { 
+                                        dataManager.updateDailyGoal(dataManager.dailyGoal - 250)
+                                    }
                                 }) {
                                     Image(systemName: "minus.circle.fill")
                                         .font(.title2)
                                         .foregroundColor(.blue)
                                 }
                                 
-                                Text("\(dailyGoal)ml")
+                                Text("\(dataManager.dailyGoal)ml")
                                     .font(.title3)
                                     .fontWeight(.semibold)
                                     .frame(minWidth: 80)
                                 
                                 Button(action: { 
-                                    if dailyGoal < 5000 { dailyGoal += 250 }
+                                    if dataManager.dailyGoal < 5000 { 
+                                        dataManager.updateDailyGoal(dataManager.dailyGoal + 250)
+                                    }
                                 }) {
                                     Image(systemName: "plus.circle.fill")
                                         .font(.title2)
@@ -63,13 +63,23 @@ struct SettingsView: View {
                                 Text("Connect Support Person")
                                     .font(.body)
                                 Spacer()
-                                Toggle("", isOn: $partnerConnected)
+                                Toggle("", isOn: .init(
+                                    get: { dataManager.partnerConnected },
+                                    set: { newValue in
+                                        dataManager.updatePartnerSettings(connected: newValue, name: dataManager.partnerName)
+                                    }
+                                ))
                                     .labelsHidden()
                             }
                             
-                            if partnerConnected {
+                            if dataManager.partnerConnected {
                                 VStack(spacing: 10) {
-                                    TextField("Partner's name", text: $partnerName)
+                                    TextField("Partner's name", text: .init(
+                                        get: { dataManager.partnerName },
+                                        set: { newName in
+                                            dataManager.updatePartnerSettings(connected: dataManager.partnerConnected, name: newName)
+                                        }
+                                    ))
                                         .textFieldStyle(RoundedBorderTextFieldStyle())
                                     
                                     Text("They will receive your progress updates and 8PM reminders")
@@ -125,10 +135,7 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $showingMessageEditor) {
-            MessageEditorView(
-                defaultMessage: $defaultMessage,
-                partnerMessage: $partnerMessage
-            )
+            MessageEditorView(dataManager: dataManager)
         }
     }
 }
@@ -163,8 +170,9 @@ struct SettingsSection<Content: View>: View {
 
 // Message Editor View
 struct MessageEditorView: View {
-    @Binding var defaultMessage: String
-    @Binding var partnerMessage: String
+    @ObservedObject var dataManager: DataManager
+    @State private var tempDefaultMessage: String = ""
+    @State private var tempPartnerMessage: String = ""
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -181,7 +189,7 @@ struct MessageEditorView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
-                        TextEditor(text: $defaultMessage)
+                        TextEditor(text: $tempDefaultMessage)
                             .frame(minHeight: 80)
                             .padding(12)
                             .background(Color(.systemGray6))
@@ -198,7 +206,7 @@ struct MessageEditorView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
-                        TextEditor(text: $partnerMessage)
+                        TextEditor(text: $tempPartnerMessage)
                             .frame(minHeight: 80)
                             .padding(12)
                             .background(Color(.systemGray6))
@@ -223,6 +231,10 @@ struct MessageEditorView: View {
                 .padding(20)
             }
             .background(Color(.systemBackground))
+            .onAppear {
+                tempDefaultMessage = dataManager.defaultMessage
+                tempPartnerMessage = dataManager.partnerMessage
+            }
             .navigationTitle("Edit Messages")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -233,6 +245,7 @@ struct MessageEditorView: View {
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Save") {
+                        dataManager.updateMessages(default: tempDefaultMessage, partner: tempPartnerMessage)
                         dismiss()
                     }
                     .fontWeight(.semibold)
@@ -243,5 +256,5 @@ struct MessageEditorView: View {
 }
 
 #Preview {
-    SettingsView(dailyGoal: .constant(2250))
+    SettingsView(dataManager: DataManager())
 }
