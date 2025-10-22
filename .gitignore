@@ -29,3 +29,18 @@ manual_chat_history/
 
 # Project Management Tools
 .kiro/
+
+# Terraform Security - Sensitive Files
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraform/
+.terraform.lock.hcl
+
+# AWS Credentials
+.aws/
+aws-credentials.json
+
+# Environment Files
+.env
+.env.local
