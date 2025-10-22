@@ -123,6 +123,27 @@ resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_role.name
 }
 
+# Lambda Function for Create User
+data "archive_file" "create_user_zip" {
+  type        = "zip"
+  source_dir  = "../lambda/create-user"
+  output_path = "create_user.zip"
+}
+
+resource "aws_lambda_function" "create_user" {
+  filename         = "create_user.zip"
+  function_name    = "hydrotrack-create-user"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "index.handler"
+  runtime         = "python3.9"
+  source_code_hash = data.archive_file.create_user_zip.output_base64sha256
+
+  tags = {
+    Name        = "HydroTrack Create User"
+    Environment = "development"
+  }
+}
+
 # API Gateway
 resource "aws_api_gateway_rest_api" "hydrotrack_api" {
   name        = "hydrotrack-api"
@@ -144,6 +165,10 @@ output "dynamodb_tables" {
 
 output "api_gateway_url" {
   value = aws_api_gateway_rest_api.hydrotrack_api.execution_arn
+}
+
+output "lambda_function_name" {
+  value = aws_lambda_function.create_user.function_name
 }
 
 output "lambda_role_arn" {
