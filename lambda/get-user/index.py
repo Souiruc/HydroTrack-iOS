@@ -1,9 +1,16 @@
 import json
 import boto3
 from botocore.exceptions import ClientError
+from decimal import Decimal
 
 dynamodb = boto3.resource('dynamodb')
 table = dynamodb.Table('hydrotrack-users')
+
+# Helper function to convert Decimal to int/float
+def decimal_default(obj):
+    if isinstance(obj, Decimal):
+        return int(obj) if obj % 1 == 0 else float(obj)
+    raise TypeError
 
 def handler(event, context):
     try:
@@ -42,7 +49,7 @@ def handler(event, context):
                 'email': user['email'],
                 'daily_goal': user['daily_goal'],
                 'created_at': user['created_at']
-            })
+            }, default=decimal_default)
         }
         
     except KeyError:
