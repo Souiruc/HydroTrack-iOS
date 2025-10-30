@@ -258,6 +258,21 @@ resource "aws_api_gateway_deployment" "hydrotrack_deployment" {
   ]
 
   rest_api_id = aws_api_gateway_rest_api.hydrotrack_api.id
+
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.users.id,
+      aws_api_gateway_resource.user_id.id,
+      aws_api_gateway_method.create_user_post.id,
+      aws_api_gateway_method.get_user_get.id,
+      aws_api_gateway_integration.create_user_integration.id,
+      aws_api_gateway_integration.get_user_integration.id,
+    ]))
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # API Gateway Stage`
