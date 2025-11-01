@@ -168,6 +168,27 @@ resource "aws_lambda_function" "get_user" {
   }
 }
 
+# Lambda Function for Log Water
+data "archive_file" "log_water_zip" {
+  type        = "zip"
+  source_dir  = "../lambda/log-water"
+  output_path = "log_water.zip"
+}
+
+resource "aws_lambda_function" "log_water" {
+  filename         = "log_water.zip"
+  function_name    = "hydrotrack-log-water"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "index.handler"
+  runtime         = "python3.9"
+  source_code_hash = data.archive_file.log_water_zip.output_base64sha256
+
+  tags = {
+    Name        = "HydroTrack Log Water"
+    Environment = "development"
+  }
+}
+
 # API Gateway
 resource "aws_api_gateway_rest_api" "hydrotrack_api" {
   name        = "hydrotrack-api"
@@ -192,6 +213,13 @@ resource "aws_api_gateway_resource" "user_id" {
   path_part   = "{id}"
 }
 
+# API Gateway Resource for /water-logs
+resource "aws_api_gateway_resource" "water_logs" {
+  rest_api_id = aws_api_gateway_rest_api.hydrotrack_api.id
+  parent_id   = aws_api_gateway_rest_api.hydrotrack_api.root_resource_id
+  path_part   = "water-logs"
+}
+
 # API Gateway Method POST /users
 resource "aws_api_gateway_method" "create_user_post" {
   rest_api_id   = aws_api_gateway_rest_api.hydrotrack_api.id
@@ -205,6 +233,14 @@ resource "aws_api_gateway_method" "get_user_get" {
   rest_api_id   = aws_api_gateway_rest_api.hydrotrack_api.id
   resource_id   = aws_api_gateway_resource.user_id.id
   http_method   = "GET"
+  authorization = "NONE"
+}
+
+# API Gateway Method POST /water-logs
+resource "aws_api_gateway_method" "log_water_post" {
+  rest_api_id   = aws_api_gateway_rest_api.hydrotrack_api.id
+  resource_id   = aws_api_gateway_resource.water_logs.id
+  http_method   = "POST"
   authorization = "NONE"
 }
 
@@ -230,6 +266,17 @@ resource "aws_api_gateway_integration" "get_user_integration" {
   uri                    = aws_lambda_function.get_user.invoke_arn
 }
 
+# API Gateway Integration for Log Water
+resource "aws_api_gateway_integration" "log_water_integration" {
+  rest_api_id = aws_api_gateway_rest_api.hydrotrack_api.id
+  resource_id = aws_api_gateway_resource.water_logs.id
+  http_method = aws_api_gateway_method.log_water_post.http_method
+
+  integration_http_method = "POST"
+  type                   = "AWS_PROXY"
+  uri                    = aws_lambda_function.log_water.invoke_arn
+}
+
 # Lambda Permission for API Gateway - Create User
 resource "aws_lambda_permission" "api_gateway_create_user" {
   statement_id  = "AllowExecutionFromAPIGateway"
@@ -248,13 +295,24 @@ resource "aws_lambda_permission" "api_gateway_get_user" {
   source_arn    = "${aws_api_gateway_rest_api.hydrotrack_api.execution_arn}/*/*"
 }
 
+# Lambda Permission for API Gateway - Log Water
+resource "aws_lambda_permission" "api_gateway_log_water" {
+  statement_id  = "AllowExecutionFromAPIGatewayLogWater"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.log_water.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.hydrotrack_api.execution_arn}/*/*"
+}
+
 # API Gateway Deployment
 resource "aws_api_gateway_deployment" "hydrotrack_deployment" {
   depends_on = [
     aws_api_gateway_method.create_user_post,
     aws_api_gateway_integration.create_user_integration,
     aws_api_gateway_method.get_user_get,
-    aws_api_gateway_integration.get_user_integration
+    aws_api_gateway_integration.get_user_integration,
+    aws_api_gateway_method.log_water_post,
+    aws_api_gateway_integration.log_water_integration
   ]
 
   rest_api_id = aws_api_gateway_rest_api.hydrotrack_api.id
@@ -263,10 +321,13 @@ resource "aws_api_gateway_deployment" "hydrotrack_deployment" {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.users.id,
       aws_api_gateway_resource.user_id.id,
+      aws_api_gateway_resource.water_logs.id,
       aws_api_gateway_method.create_user_post.id,
       aws_api_gateway_method.get_user_get.id,
+      aws_api_gateway_method.log_water_post.id,
       aws_api_gateway_integration.create_user_integration.id,
       aws_api_gateway_integration.get_user_integration.id,
+      aws_api_gateway_integration.log_water_integration.id,
     ]))
   }
 
@@ -299,6 +360,7 @@ output "lambda_functions" {
   value = {
     create_user = aws_lambda_function.create_user.function_name
     get_user    = aws_lambda_function.get_user.function_name
+    log_water   = aws_lambda_function.log_water.function_name
   }
 }
 
