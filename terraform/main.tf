@@ -74,6 +74,52 @@ resource "aws_dynamodb_table" "partnerships" {
   }
 }
 
+# Cognito User Pool for Authentication
+resource "aws_cognito_user_pool" "hydrotrack_users" {
+  name = "hydrotrack-users"
+
+  # Password policy
+  password_policy {
+    minimum_length    = 8
+    require_lowercase = true
+    require_numbers   = true
+    require_symbols   = false
+    require_uppercase = true
+  }
+
+  # User attributes
+  schema {
+    attribute_data_type = "String"
+    name               = "email"
+    required           = true
+    mutable            = true
+  }
+
+  # Auto-verify email
+  auto_verified_attributes = ["email"]
+
+  tags = {
+    Name        = "HydroTrack User Pool"
+    Environment = "development"
+  }
+}
+
+# Cognito User Pool Client
+resource "aws_cognito_user_pool_client" "hydrotrack_client" {
+  name         = "hydrotrack-client"
+  user_pool_id = aws_cognito_user_pool.hydrotrack_users.id
+
+  # Authentication flows
+  explicit_auth_flows = [
+    "ALLOW_USER_PASSWORD_AUTH",
+    "ALLOW_REFRESH_TOKEN_AUTH"
+  ]
+
+  # Token validity
+  access_token_validity  = 24  # 24 hours
+  refresh_token_validity = 30  # 30 days
+}
+
 # IAM Role for Lambda Functions
 resource "aws_iam_role" "lambda_role" {
   name = "hydrotrack-lambda-role"
@@ -257,20 +303,22 @@ resource "aws_api_gateway_method" "get_user_get" {
   authorization = "NONE"
 }
 
-# API Gateway Method POST /water-logs
+# API Gateway Method POST /water-logs (Protected)
 resource "aws_api_gateway_method" "log_water_post" {
   rest_api_id   = aws_api_gateway_rest_api.hydrotrack_api.id
   resource_id   = aws_api_gateway_resource.water_logs.id
   http_method   = "POST"
-  authorization = "NONE"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito_authorizer.id
 }
 
-# API Gateway Method GET /water-logs
+# API Gateway Method GET /water-logs (Protected)
 resource "aws_api_gateway_method" "get_water_logs_get" {
   rest_api_id   = aws_api_gateway_rest_api.hydrotrack_api.id
   resource_id   = aws_api_gateway_resource.water_logs.id
   http_method   = "GET"
-  authorization = "NONE"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito_authorizer.id
 }
 
 # API Gateway Integration for Create User
@@ -315,6 +363,14 @@ resource "aws_api_gateway_integration" "get_water_logs_integration" {
   integration_http_method = "POST"
   type                   = "AWS_PROXY"
   uri                    = aws_lambda_function.get_water_logs.invoke_arn
+}
+
+# API Gateway Authorizer
+resource "aws_api_gateway_authorizer" "cognito_authorizer" {
+  name          = "hydrotrack-cognito-authorizer"
+  rest_api_id   = aws_api_gateway_rest_api.hydrotrack_api.id
+  type          = "COGNITO_USER_POOLS"
+  provider_arns = [aws_cognito_user_pool.hydrotrack_users.arn]
 }
 
 # Lambda Permission for API Gateway - Create User
@@ -420,4 +476,12 @@ output "lambda_functions" {
 
 output "lambda_role_arn" {
   value = aws_iam_role.lambda_role.arn
+}
+
+output "cognito_user_pool_id" {
+  value = aws_cognito_user_pool.hydrotrack_users.id
+}
+
+output "cognito_client_id" {
+  value = aws_cognito_user_pool_client.hydrotrack_client.id
 }
