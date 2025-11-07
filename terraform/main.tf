@@ -256,6 +256,27 @@ resource "aws_lambda_function" "get_water_logs" {
   }
 }
 
+# Lambda Function for Analytics
+data "archive_file" "analytics_zip" {
+  type        = "zip"
+  source_dir  = "../lambda/analytics"
+  output_path = "analytics.zip"
+}
+
+resource "aws_lambda_function" "analytics" {
+  filename         = "analytics.zip"
+  function_name    = "hydrotrack-analytics"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "index.handler"
+  runtime         = "python3.9"
+  source_code_hash = data.archive_file.analytics_zip.output_base64sha256
+
+  tags = {
+    Name        = "HydroTrack Analytics"
+    Environment = "development"
+  }
+}
+
 # API Gateway
 resource "aws_api_gateway_rest_api" "hydrotrack_api" {
   name        = "hydrotrack-api"
@@ -287,6 +308,20 @@ resource "aws_api_gateway_resource" "water_logs" {
   path_part   = "water-logs"
 }
 
+# API Gateway Resource for /analytics
+resource "aws_api_gateway_resource" "analytics" {
+  rest_api_id = aws_api_gateway_rest_api.hydrotrack_api.id
+  parent_id   = aws_api_gateway_rest_api.hydrotrack_api.root_resource_id
+  path_part   = "analytics"
+}
+
+# API Gateway Resource for /analytics/daily-summary
+resource "aws_api_gateway_resource" "daily_summary" {
+  rest_api_id = aws_api_gateway_rest_api.hydrotrack_api.id
+  parent_id   = aws_api_gateway_resource.analytics.id
+  path_part   = "daily-summary"
+}
+
 # API Gateway Method POST /users
 resource "aws_api_gateway_method" "create_user_post" {
   rest_api_id   = aws_api_gateway_rest_api.hydrotrack_api.id
@@ -316,6 +351,15 @@ resource "aws_api_gateway_method" "log_water_post" {
 resource "aws_api_gateway_method" "get_water_logs_get" {
   rest_api_id   = aws_api_gateway_rest_api.hydrotrack_api.id
   resource_id   = aws_api_gateway_resource.water_logs.id
+  http_method   = "GET"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito_authorizer.id
+}
+
+# API Gateway Method GET /analytics/daily-summary (Protected)
+resource "aws_api_gateway_method" "analytics_get" {
+  rest_api_id   = aws_api_gateway_rest_api.hydrotrack_api.id
+  resource_id   = aws_api_gateway_resource.daily_summary.id
   http_method   = "GET"
   authorization = "COGNITO_USER_POOLS"
   authorizer_id = aws_api_gateway_authorizer.cognito_authorizer.id
@@ -365,6 +409,17 @@ resource "aws_api_gateway_integration" "get_water_logs_integration" {
   uri                    = aws_lambda_function.get_water_logs.invoke_arn
 }
 
+# API Gateway Integration for Analytics
+resource "aws_api_gateway_integration" "analytics_integration" {
+  rest_api_id = aws_api_gateway_rest_api.hydrotrack_api.id
+  resource_id = aws_api_gateway_resource.daily_summary.id
+  http_method = aws_api_gateway_method.analytics_get.http_method
+
+  integration_http_method = "POST"
+  type                   = "AWS_PROXY"
+  uri                    = aws_lambda_function.analytics.invoke_arn
+}
+
 # API Gateway Authorizer
 resource "aws_api_gateway_authorizer" "cognito_authorizer" {
   name          = "hydrotrack-cognito-authorizer"
@@ -409,6 +464,15 @@ resource "aws_lambda_permission" "api_gateway_get_water_logs" {
   source_arn    = "${aws_api_gateway_rest_api.hydrotrack_api.execution_arn}/*/*"
 }
 
+# Lambda Permission for API Gateway - Analytics
+resource "aws_lambda_permission" "api_gateway_analytics" {
+  statement_id  = "AllowExecutionFromAPIGatewayAnalytics"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.analytics.function_name
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.hydrotrack_api.execution_arn}/*/*"
+}
+
 # API Gateway Deployment
 resource "aws_api_gateway_deployment" "hydrotrack_deployment" {
   depends_on = [
@@ -419,7 +483,9 @@ resource "aws_api_gateway_deployment" "hydrotrack_deployment" {
     aws_api_gateway_method.log_water_post,
     aws_api_gateway_integration.log_water_integration,
     aws_api_gateway_method.get_water_logs_get,
-    aws_api_gateway_integration.get_water_logs_integration
+    aws_api_gateway_integration.get_water_logs_integration,
+    aws_api_gateway_method.analytics_get,
+    aws_api_gateway_integration.analytics_integration
   ]
 
   rest_api_id = aws_api_gateway_rest_api.hydrotrack_api.id
@@ -429,14 +495,18 @@ resource "aws_api_gateway_deployment" "hydrotrack_deployment" {
       aws_api_gateway_resource.users.id,
       aws_api_gateway_resource.user_id.id,
       aws_api_gateway_resource.water_logs.id,
+      aws_api_gateway_resource.analytics.id,
+      aws_api_gateway_resource.daily_summary.id,
       aws_api_gateway_method.create_user_post.id,
       aws_api_gateway_method.get_user_get.id,
       aws_api_gateway_method.log_water_post.id,
       aws_api_gateway_method.get_water_logs_get.id,
+      aws_api_gateway_method.analytics_get.id,
       aws_api_gateway_integration.create_user_integration.id,
       aws_api_gateway_integration.get_user_integration.id,
       aws_api_gateway_integration.log_water_integration.id,
       aws_api_gateway_integration.get_water_logs_integration.id,
+      aws_api_gateway_integration.analytics_integration.id,
     ]))
   }
 
@@ -471,6 +541,7 @@ output "lambda_functions" {
     get_user         = aws_lambda_function.get_user.function_name
     log_water        = aws_lambda_function.log_water.function_name
     get_water_logs   = aws_lambda_function.get_water_logs.function_name
+    analytics        = aws_lambda_function.analytics.function_name
   }
 }
 
