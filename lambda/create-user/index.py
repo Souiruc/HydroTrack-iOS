@@ -12,7 +12,7 @@ def handler(event, context):
         body = json.loads(event['body'])
         
         # Create user record
-        user_id = str(uuid.uuid4())
+        user_id = body.get('user_id', str(uuid.uuid4()))
         user_data = {
             'user_id': user_id,
             'name': body['name'],
