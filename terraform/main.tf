@@ -184,7 +184,7 @@ resource "aws_lambda_function" "create_user" {
   function_name    = "hydrotrack-create-user"
   role            = aws_iam_role.lambda_role.arn
   handler         = "index.handler"
-  runtime         = "python3.9"
+  runtime         = "python3.12"
   source_code_hash = data.archive_file.create_user_zip.output_base64sha256
 
   tags = {
@@ -205,7 +205,7 @@ resource "aws_lambda_function" "get_user" {
   function_name    = "hydrotrack-get-user"
   role            = aws_iam_role.lambda_role.arn
   handler         = "index.handler"
-  runtime         = "python3.9"
+  runtime         = "python3.12"
   source_code_hash = data.archive_file.get_user_zip.output_base64sha256
 
   tags = {
@@ -226,7 +226,7 @@ resource "aws_lambda_function" "log_water" {
   function_name    = "hydrotrack-log-water"
   role            = aws_iam_role.lambda_role.arn
   handler         = "index.handler"
-  runtime         = "python3.9"
+  runtime         = "python3.12"
   source_code_hash = data.archive_file.log_water_zip.output_base64sha256
 
   tags = {
@@ -247,7 +247,7 @@ resource "aws_lambda_function" "get_water_logs" {
   function_name    = "hydrotrack-get-water-logs"
   role            = aws_iam_role.lambda_role.arn
   handler         = "index.handler"
-  runtime         = "python3.9"
+  runtime         = "python3.12"
   source_code_hash = data.archive_file.get_water_logs_zip.output_base64sha256
 
   tags = {
@@ -268,7 +268,7 @@ resource "aws_lambda_function" "analytics" {
   function_name    = "hydrotrack-analytics"
   role            = aws_iam_role.lambda_role.arn
   handler         = "index.handler"
-  runtime         = "python3.9"
+  runtime         = "python3.12"
   source_code_hash = data.archive_file.analytics_zip.output_base64sha256
 
   tags = {
